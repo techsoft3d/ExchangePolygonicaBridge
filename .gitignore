@@ -1,0 +1,81 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Exchange
+/bin/
+/documentation/
+/include/A3D*.*
+/include/hoops_license.h
+/tools/
+/samples/data/
+/samples/publish
+/samples/x64
+*.txt
+/samples/exchange/exchangesource/BrepAdaptor/
+/samples/exchange/exchangesource/CascadedAttributes/
+/samples/exchange/exchangesource/Collision/
+/samples/exchange/exchangesource/CreatePRCBrepWithGeometry/
+/samples/exchange/exchangesource/CreatePRCCubes/
+/samples/exchange/exchangesource/DrawingViewer/
+/samples/exchange/exchangesource/DumpFeatureTree/
+/samples/exchange/exchangesource/ImportExport/
+/samples/exchange/exchangesource/IncrementalLoad/
+/samples/exchange/exchangesource/LoadMultiConfigCADFile/
+/samples/exchange/exchangesource/MultiplePRCFiles/
+/samples/exchange/exchangesource/NetWrapper/
+/samples/exchange/exchangesource/PRC2IFCXML/
+/samples/exchange/exchangesource/PRC2XML/
+/samples/exchange/exchangesource/SewBrep/
+/samples/exchange/exchangesource/Shattered/
+/samples/exchange/exchangesource/TranslateToPgSolids/TranslateToPgSolids.vcxproj.filters
+/samples/exchange/exchangesource/TranslateToPgSolids/TranslateToPgSolids.vcxproj.user
+/samples/exchange/exchangesource/TranslateToPgSolids/x64/
+/samples/exchange/exchangesource/TranslateToPkParts/
+/samples/exchange/exchangesource/Viewer/
+/samples/exchange/exchangesource/common.hpp
+/samples/publishadvanced.sln
+/samples/publishstandard.sln
+/samples/.vs/
+/samples/HOOPSExchangePublishSample.props
+/samples/exchange.sln
+<<<<<<< HEAD
+*.tlog
+*.log
+*.pdb
+*.ilk
+*.suo
+*.*db
+*.ipch
+/build/x64/Release/TranslateToPgSolids.iobj
+*.bat
+
