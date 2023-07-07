@@ -11,6 +11,10 @@
 #include "pg/pgrender.h"
 #include "pg/pgmacros.h"
 #include "window_wide_strings.h"
+#include <string>
+#include <stdlib.h>
+#include <stdio.h>
+#include <wchar.h>
 
 A3DPolygonicaOptions pgOpts;
 
@@ -57,12 +61,20 @@ static void handle_pg_error(PTStatus status, char* err_string)
 	}
 }
 
+void print_name(std::string str, A3D_log_level level)
+{
+	printf("%s  %d\n", str.c_str(), level);
+}
+
+
 static PTEntityGroup findRegionFromFaceAppData(PTFace face)
 {
 	PTSolid solid = PFEntityGetEntityProperty(face, PV_FACE_PROP_SOLID);
 	PTEnvironment env = PFEntityGetEntityProperty(solid, PV_SOLID_PROP_ENVIRONMENT);
-	PTEntityGroup region = PV_ENTITY_NULL;
-	void* topoFace = PFEntityGetPointerProperty(face, PV_FACE_PROP_APP_DATA);
+	PTEntityGroup region = PV_ENTITY_NULL; 
+
+	
+	void* topoFace = PFEntityGetPointerProperty(face, PV_FACE_PROP_APP_SURFACE);
 	// Use a category to find all the faces with the same topoface, and highlight them
 
 	PTCategoryOpts options;
@@ -80,12 +92,22 @@ static PTEntityGroup findRegionFromFaceAppData(PTFace face)
 	return region;
 }
 
+
+std::wstring getHOOPSExchangeLibraryPathW()
+{
+	wchar_t* pInstallDir = _wgetenv(L"HEXCHANGE_INSTALL_DIR");
+	std::wstring wEnv(pInstallDir);
+	std::wstring wBin(L"\\bin\\win64_v142"); // this path relates to VS2019 64 bit platform
+	std::wstring wPath = wEnv + wBin;
+	return wPath;
+}
+
+
 int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 {
     //
     // ### COMMAND LINE ARGUMENTS
     //
-
     if (iArgc < 2)
     {
         MY_PRINTF2("Usage:\n %s <input CAD file>\n", ppcArgv[0]);
@@ -93,24 +115,28 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
     }
     
     MY_STRCPY(acSrcFileName, ppcArgv[1]);
+    
+	//
+	// ### Initialize HOOPS Exchange
+	//
+	std::wstring wPath = getHOOPSExchangeLibraryPathW();
+	A3DSDKHOOPSExchangeLoader sHoopsExchangeLoader(wPath.c_str());
 
-    //
-    // ### INITIALIZE HOOPS EXCHANGE
-    //
-
-    A3DSDKHOOPSExchangeLoader sHoopsExchangeLoader(_T(HOOPS_BINARY_DIRECTORY));
     CHECK_RET(sHoopsExchangeLoader.m_eSDKStatus);
 
 	//
-	// ### INITIALIZE POLYGONICA
+	// ### Initialize Polygonica
 	//
-
 	PTStatus status;
 
 	PTInitialiseOpts initialise_options;
 	PMInitInitialiseOpts(&initialise_options);
 	status = PFInitialise(PV_LICENSE, &initialise_options);
-	if (status != PV_STATUS_OK) return status;
+	if (status != PV_STATUS_OK)
+	{
+		handle_pg_error(status, (char * )"PFInitialise");
+		return status;
+	}
 	
 	PTEnvironmentOpts env_options;
 	PMInitEnvironmentOpts(&env_options);
@@ -121,7 +147,7 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 
 	PFEntitySetPointerProperty(pgOpts.m_Environment, PV_ENV_PROP_ERROR_REPORT_CB, handle_pg_error);
 
-	/* Create a window to render into */
+	// Create a window to render into 
 	HWND window;
 	window = PgWindowCreate(L"TranslateToPgSolids", 100, 100, 1200, 900);
 
@@ -138,14 +164,23 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 	A3D_INITIALIZE_DATA(A3DRWParamsLoadData, load_params);
 	load_params.m_sGeneral.m_eReadGeomTessMode = kA3DReadTessOnly;
 
+	//
+	//  HOOPS Exchange CAD Import
+	//
 	A3DImport sImport(acSrcFileName);
 	sImport.m_sLoadData.m_sGeneral.m_eReadGeomTessMode = A3DEReadGeomTessMode::kA3DReadTessOnly;
 
 	const A3DStatus iRet = sHoopsExchangeLoader.Import(sImport);
 	CHECK_RET(iRet);
 
+	//
+	//  Create  Polygonica Entities from imported CAD Model
+	//
 	A3DModelCreatePGWorld(sHoopsExchangeLoader.m_psModelFile, pgOpts);
 
+	//
+	// Setup up view for Poloygonica graphics display
+	//
 	PTViewport vp;
 	PTPoint vp_from = { 1.0, 0.8, 0.6 };
 	PTPoint vp_to = { 0.0, 0.0, 0.0 };
@@ -157,10 +192,10 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 	status = PFViewportFit(vp, bounds);
 	status = PgWindowRegister(window, drawable, vp);
 
-	// Print entitie paths
+	// Print entity paths
 	for (int i = 0; i < pgOpts.m_entities.size(); i++)
 	{
-		std::vector<void*> *path = (std::vector<void*> * )PFEntityGetPointerProperty(pgOpts.m_entities[i], PV_WORLD_PROP_APP_DATA);
+		std::vector<void*>* path = (std::vector<void*> *)pgOpts.m_paths[pgOpts.m_entities[i]];
 		for (int j = 0; j < path->size(); j++)
 		{
 			A3DEEntityType eType = kA3DTypeUnknown;
@@ -169,12 +204,14 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 			if (eType == kA3DTypeAsmProductOccurrence)
 			{
 				std::string name;
-				stGetName(pNode, name);
+				stGetName(pNode, name, print_name);
 				printf("%s | ", name.c_str());
 			}
 		}
 		printf("\n");
 	}
+
+	PTEntityGroup oldRegion = PV_ENTITY_NULL;
 
 	do
 	{
@@ -220,7 +257,9 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 				PTSolid solid = PFEntityGetEntityProperty(face, PV_FACE_PROP_SOLID);
 				PTEntityGroup selectedRegion = findRegionFromFaceAppData(face);
 				status = PFHighlightCreate(solid, selectedRegion, &highlight);
-				//PFEntityGroupDestroy(selectedRegion);
+				if ( oldRegion != PV_ENTITY_NULL )
+					PFEntityGroupDestroy(oldRegion);
+				oldRegion = selectedRegion;
 			}
 
 			PFEntityGroupDestroy(entityGroup);
@@ -235,8 +274,8 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 	//
 	PgWindowText(L"Press any key to terminate");
 
-	destroyBridge(pgOpts);
 
+	A3DDestroyBridgeData(pgOpts);
 	status = PFWorldDestroy(pgOpts.m_World);
 
 	if (pgOpts.m_Environment)
