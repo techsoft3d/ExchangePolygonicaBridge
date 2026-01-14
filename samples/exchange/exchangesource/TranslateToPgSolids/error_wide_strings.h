@@ -49,7 +49,7 @@ static void simple_error_callback(
    LPCWSTR /*char    **/err_string
    )
 { 
-   static struct __status_name {
+   static struct __status_name__status_name {
       PTStatus value;
       char * name;
    } status_names[] = {

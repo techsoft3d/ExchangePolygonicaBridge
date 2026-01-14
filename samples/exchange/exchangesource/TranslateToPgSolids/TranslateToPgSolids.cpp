@@ -3,15 +3,20 @@
 
 #define INITIALIZE_A3D_API
 #include <A3DSDKIncludes.h>
+#include "hoops_license.h"
 
 #include "common.hpp"
-#include <../../../../include/ExchangePolygonicaBridge.h>
 
 #include "pg/pgapi.h"
-#include "pg/pgrender.h"
+#include "pg/pgrender.h" // include this before the bridge as it defines some macros 
 #include "pg/pgmacros.h"
-#include "window_wide_strings.h"
+#include "pgwindow/IWindow.h"
+#include <vector> // for std::vectorn include before the bridge
+#include "ExchangePolygonicaBridge.h"
+
+
 #include <string>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <wchar.h>
@@ -32,21 +37,21 @@ static void handle_pg_error(PTStatus status, char* err_string)
 	err_code = PM_ERR_FROM_API_ERROR_CODE(status);
 	if (status_code & PV_STATUS_BAD_CALL)
 	{
-		printf("PG:BAD_CALL: Function % d Error % d: % s\n", func_code, err_code, err_string);
+		printf("PG:BAD_CALL: Function %d Error %d: %s\n", func_code, err_code, err_string);
 	}
 	if (status_code & PV_STATUS_MEMORY)
 	{
-		printf("PG:MEMORY: Function % d Error % d: % s\n", func_code, err_code, err_string);
+		printf("PG:MEMORY: Function %d Error %d: %s\n", func_code, err_code, err_string);
 			fatal_error |= status;
 	}
 	if (status_code & PV_STATUS_EXCEPTION)
 	{
-		printf("PG:EXCEPTION: Function % d Error % d: % s\n", func_code, err_code, err_string);
+		printf("PG:EXCEPTION: Function %d Error %d: %s\n", func_code, err_code, err_string);
 			fatal_error |= status;
 	}
 	if (status_code & PV_STATUS_FILE_IO)
 	{
-		printf("PG:FILE I/0: Function % d Error % d: % s\n", func_code, err_code, err_string);
+		printf("PG:FILE I/0: Function %d Error %d: %s\n", func_code, err_code, err_string);
 	}
 	if (status_code & PV_STATUS_INTERRUPT)
 	{
@@ -93,6 +98,7 @@ static PTEntityGroup findRegionFromFaceAppData(PTFace face)
 }
 
 
+#ifdef _WIN32
 std::wstring getHOOPSExchangeLibraryPathW()
 {
 	wchar_t* pInstallDir = _wgetenv(L"HEXCHANGE_INSTALL_DIR");
@@ -101,9 +107,27 @@ std::wstring getHOOPSExchangeLibraryPathW()
 	std::wstring wPath = wEnv + wBin;
 	return wPath;
 }
+#endif
+
+std::string getHOOPSExchangeLibraryPathA()
+{
+	char* pInstallDir = getenv("HEXCHANGE_INSTALL_DIR");
+	if (pInstallDir == nullptr) {
+		return "";
+	}
+	std::string aEnv(pInstallDir);
+	std::string aBin("/bin/linux64"); // Linux 64 bit platform
+	std::string aPath = aEnv + aBin;
+	return aPath;
+}
 
 
+
+#ifdef _WIN32
 int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
+#else
+int main(A3DInt32 iArgc, char** ppcArgv)
+#endif
 {
     //
     // ### COMMAND LINE ARGUMENTS
@@ -119,9 +143,24 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 	//
 	// ### Initialize HOOPS Exchange
 	//
-	std::wstring wPath = getHOOPSExchangeLibraryPathW();
-	A3DSDKHOOPSExchangeLoader sHoopsExchangeLoader(wPath.c_str());
 
+#ifdef _WIN32
+	std::wstring whexPath = getHOOPSExchangeLibraryPathW();
+	if ( whexPath.empty() )
+	{
+		MY_PRINTF("Please set the HEXCHANGE_INSTALL_DIR environment variable to point to your HOOPS Exchange installation directory.\n");
+		return A3D_ERROR;
+	}
+	A3DSDKHOOPSExchangeLoader sHoopsExchangeLoader(whexPath.c_str(), HOOPS_LICENSE);
+#else
+	std::string hexPath = getHOOPSExchangeLibraryPathA();
+	if ( hexPath.empty() )
+	{
+		MY_PRINTF("Please set the HEXCHANGE_INSTALL_DIR environment variable to point to your HOOPS Exchange installation directory.\n");
+		return A3D_ERROR;
+	}
+	A3DSDKHOOPSExchangeLoader sHoopsExchangeLoader(hexPath.c_str(), HOOPS_LICENSE);
+#endif
     CHECK_RET(sHoopsExchangeLoader.m_eSDKStatus);
 
 	//
@@ -145,14 +184,14 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 
 	if (status != PV_STATUS_OK) return status;
 
-	PFEntitySetPointerProperty(pgOpts.m_Environment, PV_ENV_PROP_ERROR_REPORT_CB, handle_pg_error);
+	PFEntitySetPointerProperty(pgOpts.m_Environment, PV_ENV_PROP_ERROR_REPORT_CB, (PTPointer) handle_pg_error);
 
 	// Create a window to render into 
-	HWND window;
-	window = PgWindowCreate(L"TranslateToPgSolids", 100, 100, 1200, 900);
-
+	auto windowManager = CreatePlatformWindow();
+	WindowHandle window = windowManager->Create("TranslateToPgSolids", 100, 100, 1200, 900);
 	PTDrawable drawable;
-	status = PFDrawableCreate(pgOpts.m_Environment, window, NULL, &drawable);
+	windowManager->DrawableCreate(pgOpts.m_Environment, window, NULL, &drawable);
+
 
 	status = PFWorldCreate(pgOpts.m_Environment, NULL, &pgOpts.m_World);
 
@@ -190,13 +229,13 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 	PTBounds bounds;
 	PFEntityGetBoundsProperty(pgOpts.m_World, PV_WORLD_PROP_BOUNDS, bounds);
 	status = PFViewportFit(vp, bounds);
-	status = PgWindowRegister(window, drawable, vp);
+	status = windowManager->Register(window, drawable, vp);
 
 	// Print entity paths
-	for (int i = 0; i < pgOpts.m_entities.size(); i++)
+	for (size_t i = 0; i < pgOpts.m_entities.size(); i++)
 	{
 		std::vector<void*>* path = (std::vector<void*> *)pgOpts.m_paths[pgOpts.m_entities[i]];
-		for (int j = 0; j < path->size(); j++)
+		for (size_t j = 0; j < path->size(); j++)
 		{
 			A3DEEntityType eType = kA3DTypeUnknown;
 			void* pNode = path->at(j);
@@ -204,7 +243,7 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 			if (eType == kA3DTypeAsmProductOccurrence)
 			{
 				std::string name;
-				stGetName(pNode, name, print_name);
+				A3DGetName(pNode, name, print_name);
 				printf("%s | ", name.c_str());
 			}
 		}
@@ -216,7 +255,7 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 	do
 	{
 		PTNat32 mouse_x, mouse_y;
-		PgWindowMouse(L"Double click to select a face", &mouse_x, &mouse_y);
+		windowManager->Mouse("Double click to select a face", &mouse_x, &mouse_y);
 
 		PTPick pick;
 		status = PFPickCreateFromScreen(drawable, vp, mouse_x, mouse_y, &pick);
@@ -272,7 +311,7 @@ int wmain(A3DInt32 iArgc, A3DUniChar** ppcArgv)
 	//
 	// ### CLEAN UP
 	//
-	PgWindowText(L"Press any key to terminate");
+	windowManager->Text("Press any key to terminate");
 
 
 	A3DDestroyBridgeData(pgOpts);

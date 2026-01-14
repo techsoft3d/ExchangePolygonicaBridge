@@ -6,7 +6,7 @@
 *.lo
 *.o
 *.obj
-
+.vs/*
 # Precompiled Headers
 *.gch
 *.pch
@@ -30,6 +30,9 @@
 *.exe
 *.out
 *.app
+# Visual Studio  and VSCode
+.vs/
+.vscode/
 
 # Exchange
 /bin/
